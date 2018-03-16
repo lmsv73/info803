@@ -16,12 +16,14 @@ int personne3 = 3;
 int NB_ALLOWED = 2;
 int allowed[NB_ALLOWED];
 
+int currentTime = 0;
 
 int indiceJournal = 0;
 
 typedef Page {
     int id;
     bit entree;
+    int time;
 }
 
 Page pages[100];
@@ -46,6 +48,7 @@ init{
     run lecteur();
     run voyant();
     run porte();
+    run getCurrentTime();
 }
 
 inline wait(x) {
@@ -57,9 +60,16 @@ inline wait(x) {
     od;
 }
 
+proctype getCurrentTime() {
+    do
+        :: currentTime = currentTime + 1;
+    od;
+}
+
 inline pushJournal(id, entree) {
     pages[indiceJournal].id = id;
     pages[indiceJournal].entree = entree;
+    pages[indiceJournal].time = currentTime;
     
     indiceJournal++;
 }
@@ -69,7 +79,7 @@ inline showJournal() {
 
     printf("-----------JOURNAL-----------------\n");
     for(i:0..(indiceJournal - 1)) {
-        printf("Utilisateur %d est entré\n", pages[i].id);
+        printf("Utilisateur %d est entré au temps %d\n", pages[i].id, pages[i].time);
     }
 }
 
