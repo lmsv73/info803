@@ -2,6 +2,8 @@
 #define rouge 0
 #define bloque 0
 #define debloque 1
+#define entre 1
+#define sortie 0
 
 int timeGreen =  5000;
 int timeRed   = 10000;
@@ -14,6 +16,16 @@ int personne3 = 3;
 int NB_ALLOWED = 2;
 int allowed[NB_ALLOWED];
 
+
+int indiceJournal = 0;
+
+typedef Page {
+    int id;
+    bit entree;
+}
+
+Page pages[100];
+
 // Activation de la porte si le voyant est allumé vert
 chan activePorte = [100] of {bit};
 
@@ -23,22 +35,17 @@ chan passeBadge = [100] of {int};
 // Activation du voyant
 chan activeVoyant = [100] of {bit};
 
-// Démarrage du délai permettant de gérer les temps du voyant / porte
-chan activeDelayPorte  = [100] of {int};
-chan activeVoyantVert  = [100] of {int};
-chan activeVoyantRouge = [100] of {int};
+// Envoi de l'id de l'utilkisateur depuis le lecteur au voyant
+chan sendIdToVoyant = [100] of {int};
 
 init{
     allowed[0] = personne1;
     allowed[1] = personne2;
 
-    run personne();
+    run simulator();
     run lecteur();
     run voyant();
     run porte();
-    run activeDelayPorte();
-    run activeVoyantVert();
-    run activeVoyantRouge();
 }
 
 inline wait(x) {
@@ -50,7 +57,23 @@ inline wait(x) {
     od;
 }
 
-proctype personne() {
+inline pushJournal(id, entree) {
+    pages[indiceJournal].id = id;
+    pages[indiceJournal].entree = entree;
+    
+    indiceJournal++;
+}
+
+inline showJournal() {
+    int i;
+
+    printf("-----------JOURNAL-----------------\n");
+    for(i:0..(indiceJournal - 1)) {
+        printf("Utilisateur %d est entré\n", pages[i].id);
+    }
+}
+
+proctype simulator() {
     passeBadge!personne1;
 }
 
@@ -70,18 +93,20 @@ proctype lecteur() {
     }
     
     if
-        :: accept -> printf("Badge valide\n"); activeVoyant!vert; activeVoyantVert!timeGreen;
-        :: !accept -> printf("Badge invalide\n"); activeVoyant!rouge; activeVoyantRouge!timeRed;
+        :: accept -> printf("Badge valide\n"); activeVoyant!vert; sendIdToVoyant!id;
+        :: !accept -> printf("Badge invalide\n"); activeVoyant!rouge; 
     fi
 }
 
 proctype voyant() {
     bool state;
+    int id;
     activeVoyant?state;
+    sendIdToVoyant?id;
 
     if
-        :: state -> activePorte!debloque; 
-        :: !state -> activePorte!bloque;
+        :: state ->  activePorte!debloque; printf("Voyant vert pendant %d sec\n", timeGreen/1000); pushJournal(id, entre); wait(timeGreen*100); printf("Voyant éteint\n");
+        :: !state -> activePorte!bloque; printf("Voyant rouge pendant %d sec\n", timeRed/1000); wait(timeRed*100);  printf("Voyant éteint\n");
     fi
 }
 
@@ -90,28 +115,10 @@ proctype porte() {
     activePorte?state;
 
     if
-        :: state -> activeDelayPorte!timeOpen;
+        :: state -> printf("Porte ouverte pendant %d sec\n", timeOpen/1000); wait(timeOpen*100); printf("Porte fermée\n");
         :: else;
     fi
+
+    showJournal();
 }
 
-proctype delayPorte() {
-    int delay;
-    activeDelayPorte?delay;
-    printf("Porte ouverte pendant %d sec\n", timeOpen/1000);
-    wait(delay);
-}
-
-proctype delayVoyantVert() {
-    int delay;
-    activeVoyantVert?delay;
-    printf("Voyant vert pendant %d sec\n", timeGreen/1000);
-    wait(delay);
-}
-
-proctype delayVoyantRouge() {
-    int delay;
-    activeVoyantRouge?delay;
-    printf("Voyant rouge pendant %d sec\n", timeRed/1000);
-    wait(delay);
-}
