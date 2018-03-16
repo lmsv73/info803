@@ -5,6 +5,8 @@
 #define entre 1
 #define sortie 0
 
+int NB_PROGRAMS = 5;
+
 int timeGreen =  5000;
 int timeRed   = 10000;
 int timeOpen  = 30000;
@@ -14,7 +16,8 @@ int personne2 = 2;
 int personne3 = 3;
 
 int NB_ALLOWED = 2;
-int allowed[NB_ALLOWED];
+int allowed[2];
+int NB_USER = 3;
 
 int currentTime = 0;
 
@@ -40,15 +43,18 @@ chan activeVoyant = [100] of {bit};
 // Envoi de l'id de l'utilkisateur depuis le lecteur au voyant
 chan sendIdToVoyant = [100] of {int};
 
+// no channel initialization 
+chan STDIN;	
+
+// Arret des programmes
+chan commande = [100] of {bit};
+
+
 init{
     allowed[0] = personne1;
     allowed[1] = personne2;
 
     run simulator();
-    run lecteur();
-    run voyant();
-    run porte();
-    run getCurrentTime();
 }
 
 inline wait(x) {
@@ -60,10 +66,12 @@ inline wait(x) {
     od;
 }
 
-proctype getCurrentTime() {
-    do
-        :: currentTime = currentTime + 1;
-    od;
+inline closePrograms() {
+    int i;
+
+    for(i:1..NB_PROGRAMS) {
+        commande!1;
+    }
 }
 
 inline pushJournal(id, entree) {
@@ -84,51 +92,115 @@ inline showJournal() {
 }
 
 proctype simulator() {
-    passeBadge!personne1;
+    int c;
+    bit cmd;
+    printf("Entrez 1, 2 ou 3 pour faire entrer un utlisateur\n");
+    printf("Entrez 'j' pour afficher le journal\n");
+    printf("Entrez 'q' pour quitter\n");
+    do
+        :: STDIN?c ->
+            if
+                :: c >= 49 && c <= (NB_USER + 49) -> passeBadge!(c - 48);
+                    run lecteur();
+                    run voyant();
+                    run porte();
+                :: c == 106 -> showJournal();
+                :: c == 113 -> closePrograms();
+                :: else -> printf("Erreur de saisie\n");
+            fi
+        :: commande?cmd ->
+            if
+                :: cmd == 1 -> break;
+                :: else -> skip;
+            fi
+    od;
 }
 
 proctype lecteur() {
     int id, i;
     bool accept = false;
+    bit cmd;
     
-    passeBadge?id;
+    do 
+        ::  passeBadge?id;
+            printf("Lecture du badge %d\n", id);
+            
+            for (i: 0..(NB_ALLOWED - 1)) {
+                if
+                    :: id == allowed[i] -> accept = true;
+                    :: else;
+                fi
+            }
 
-    printf("Lecture du badge %d\n", id);
-
-    for (i: 0..(NB_ALLOWED - 1)) {
-        if
-            :: id == allowed[i] -> accept = true;
-            :: else;
-        fi
-    }
+            if
+                :: accept -> 
+                    printf("Badge valide\n"); 
+                    activeVoyant!vert; 
+                    sendIdToVoyant!id;
+                :: !accept -> 
+                    printf("Badge invalide\n"); 
+                    activeVoyant!rouge; 
+            fi
+        :: commande?cmd ->
+            if
+                :: cmd == 1 -> break;
+                :: else -> skip;
+            fi
+    od;
     
-    if
-        :: accept -> printf("Badge valide\n"); activeVoyant!vert; sendIdToVoyant!id;
-        :: !accept -> printf("Badge invalide\n"); activeVoyant!rouge; 
-    fi
 }
 
 proctype voyant() {
     bool state;
     int id;
-    activeVoyant?state;
-    sendIdToVoyant?id;
+    bit cmd;
+    
 
-    if
-        :: state ->  activePorte!debloque; printf("Voyant vert pendant %d sec\n", timeGreen/1000); pushJournal(id, entre); wait(timeGreen*100); printf("Voyant éteint\n");
-        :: !state -> activePorte!bloque; printf("Voyant rouge pendant %d sec\n", timeRed/1000); wait(timeRed*100);  printf("Voyant éteint\n");
-    fi
+    do
+        ::  activeVoyant?state;
+            sendIdToVoyant?id;
+            if
+                :: state ->  
+                    activePorte!debloque; 
+                    printf("Voyant vert pendant %d sec\n", timeGreen/1000); 
+                    currentTime++;
+                    pushJournal(id, entre); 
+                    wait(timeGreen*100); 
+                    printf("Voyant éteint\n");
+                :: !state -> 
+                    activePorte!bloque; 
+                    printf("Voyant rouge pendant %d sec\n", timeRed/1000); 
+                    wait(timeRed*100);  
+                    printf("Voyant éteint\n");
+            fi
+        :: commande?cmd ->
+            if
+                :: cmd == 1 -> break;
+                :: else -> skip;
+            fi
+    od;
+    
 }
 
 proctype porte() {
     bool state;
-    activePorte?state;
-
-    if
-        :: state -> printf("Porte ouverte pendant %d sec\n", timeOpen/1000); wait(timeOpen*100); printf("Porte fermée\n");
-        :: else;
-    fi
-
-    showJournal();
+    bit cmd;
+    
+    do 
+        :: activePorte?state;
+            if
+                :: state -> 
+                    printf("Porte ouverte pendant %d sec\n", timeOpen/1000); 
+                    wait(timeOpen*100); 
+                    printf("Porte fermée\n");
+                :: else;
+            fi
+        :: commande?cmd ->
+            if
+                :: cmd == 1 -> break;
+                :: else -> skip;
+            fi
+    od;
+   
 }
 
