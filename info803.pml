@@ -25,7 +25,7 @@ int indiceJournal = 0;
 
 typedef Page {
     int id;
-    bit entree;
+    bit action;
     int time;
 }
 
@@ -55,6 +55,9 @@ init{
     allowed[1] = personne2;
 
     run simulator();
+    run lecteur();
+    run voyant();
+    run porte();
 }
 
 inline wait(x) {
@@ -76,7 +79,7 @@ inline closePrograms() {
 
 inline pushJournal(id, entree) {
     pages[indiceJournal].id = id;
-    pages[indiceJournal].entree = entree;
+    pages[indiceJournal].action = entree;
     pages[indiceJournal].time = currentTime;
     
     indiceJournal++;
@@ -101,9 +104,6 @@ proctype simulator() {
         :: STDIN?c ->
             if
                 :: c >= 49 && c <= (NB_USER + 49) -> passeBadge!(c - 48);
-                    run lecteur();
-                    run voyant();
-                    run porte();
                 :: c == 106 -> showJournal();
                 :: c == 113 -> closePrograms();
                 :: else -> printf("Erreur de saisie\n");
@@ -117,12 +117,12 @@ proctype simulator() {
 }
 
 proctype lecteur() {
-    int id, i;
-    bool accept = false;
-    bit cmd;
-    
     do 
-        ::  passeBadge?id;
+        ::  int id, i;
+            bool accept = false;
+        bit cmd;
+        
+            passeBadge?id;
             printf("Lecture du badge %d\n", id);
             
             for (i: 0..(NB_ALLOWED - 1)) {
